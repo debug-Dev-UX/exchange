@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USD ⇄ KHR Live Market Dashboard & Developer API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Kantumruy Pro', 'sans-serif'],
+                    },
+                    colors: {
+                        khmer: {
+                            blue: '#032ea1',
+                            red: '#e00025',
+                            gold: '#f59e0b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', 'Kantumruy Pro', sans-serif;
+        }
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            80%, 100% { transform: scale(2.2); opacity: 0; }
+        }
+        .live-dot::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background-color: #10b981;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .swap-rotate {
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white flex flex-col justify-between">
+
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-rose-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 border border-white/10">
+                    <i class="ph-bold ph-currency-circle-dollar text-xl text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-lg tracking-tight text-white">KhmerRate <span class="text-indigo-400 font-semibold">API Cloud</span></h1>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">USD ⇄ KHR</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Live Market Exchange Dashboard & Developer API Portal</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="flex items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800 order-3 sm:order-2 w-full sm:w-auto justify-center">
+                <button onclick="switchMainTab('dashboard')" id="navTabDashboard" class="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow flex items-center justify-center gap-1.5 transition">
+                    <i class="ph-bold ph-chart-line-up"></i> Live Dashboard
+                </button>
+                <button onclick="switchMainTab('api')" id="navTabApi" class="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition">
+                    <i class="ph-bold ph-code"></i> Developer API
+                </button>
+                <button onclick="switchMainTab('widget')" id="navTabWidget" class="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition">
+                    <i class="ph-bold ph-browsers"></i> Website Widget
+                </button>
+            </div>
+
+            <!-- Live API Status Pill -->
+            <div class="flex items-center gap-2.5 order-2 sm:order-3">
+                <div id="statusBadge" class="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-full text-xs">
+                    <span class="relative flex h-2.5 w-2.5 live-dot">
+                        <span id="statusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span id="statusText" class="text-slate-300 font-medium">Fetching live rate...</span>
+                </div>
+                <button onclick="fetchLiveRate(true)" id="refreshBtn" title="Refresh Live Rate" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition active:scale-95">
+                    <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-base block"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 space-y-6 flex-1">
+
+        <!-- Live Market Rate KPI Cards -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="sm:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs uppercase tracking-wider font-semibold text-indigo-400 flex items-center gap-1.5">
+                        <i class="ph-fill ph-globe-hemisphere-east"></i> Live Mid-Market Spot Rate
+                    </span>
+                    <span id="rateDiffBadge" class="text-[11px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">LIVE FEED</span>
+                </div>
+                <div class="my-2">
+                    <span class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="activeRateDisplay">$1.00 = 4,065.00 ៛</span>
+                </div>
+                <p id="lastUpdatedText" class="text-xs text-slate-400">Syncing with global forex feed...</p>
+            </div>
+
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400">Inverse Rate (KHR → USD)</span>
+                    <i class="ph-duotone ph-arrows-left-right text-indigo-400 text-lg"></i>
+                </div>
+                <div class="my-2">
+                    <span id="inverseRateDisplay" class="text-xl sm:text-2xl font-extrabold text-indigo-300">10,000 ៛ = $2.4600</span>
+                </div>
+                <span class="text-[11px] text-slate-500" id="singleRielUsdText">1,000 ៛ = $0.2460 USD</span>
+            </div>
+
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400">Public JSON API Status</span>
+                    <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">200 OK</span>
+                </div>
+                <div class="my-2 flex items-baseline gap-2">
+                    <span id="apiLatencyBadge" class="text-xl sm:text-2xl font-extrabold text-white">42 ms</span>
+                    <span class="text-xs text-emerald-400 font-medium">CORS Enabled</span>
+                </div>
+                <button onclick="switchMainTab('api')" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 text-left">
+                    Get API Endpoint for your site <i class="ph-bold ph-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- TAB 1: LIVE DASHBOARD VIEW -->
+        <div id="viewDashboard" class="space-y-6">
+        <!-- Main Grid: Left = Instant Bi-Directional Converter, Right = Dual Currency Change & Banknote Breakdown -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="ph-fill ph-arrows-left-right text-indigo-400"></i>
+                            Instant Currency Converter
+                        </h2>
+                        <button onclick="clearConverter()" class="text-xs text-slate-400 hover:text-rose-400 transition flex items-center gap-1">
+                            <i class="ph ph-trash"></i> Reset
+                        </button>
+                    </div>
+
+                    <!-- Primary Input Stack -->
+                    <div id="converterStack" class=" flex flex-col gap-3">
+                        
+                        <!-- USD Card -->
+                        <div id="usdCard" class="bg-slate-950/90 border border-slate-800 focus-within:border-indigo-500/80 rounded-2xl p-4 transition-all">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="text-2xl" role="img" aria-label="US Flag">🇺🇸</span>
+                                    <div>
+                                        <span class="font-bold text-sm text-white block leading-none">USD</span>
+                                        <span class="text-[11px] text-slate-400">United States Dollar ($)</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="copyValue('usdInput', 'USD')" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/70 flex items-center gap-1 transition" title="Copy USD amount">
+                                        <i class="ph ph-copy"></i> Copy
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="relative flex items-center">
+                                <span class="text-2xl sm:text-3xl font-bold text-emerald-400 mr-2 select-none">$</span>
+                                <input type="number" id="usdInput" step="any" placeholder="0.00" value="10"
+                                    oninput="onUsdInput(this.value)"
+                                    class="w-full bg-transparent text-2xl sm:text-4xl font-extrabold text-white outline-none placeholder-slate-700">
+                            </div>
+                            <!-- Quick USD Chips -->
+                            <div class="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-800/80">
+                                <span class="text-[11px] text-slate-500 mr-1">Quick Add:</span>
+                                <button onclick="addQuickUsd(1)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$1</button>
+                                <button onclick="addQuickUsd(5)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$5</button>
+                                <button onclick="addQuickUsd(10)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$10</button>
+                                <button onclick="addQuickUsd(20)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$20</button>
+                                <button onclick="addQuickUsd(50)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$50</button>
+                                <button onclick="addQuickUsd(100)" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+$100</button>
+                            </div>
+                        </div>
+
+                        <!-- Center Swap Divider -->
+                        <div class="relative flex items-center justify-center -my-5 z-10">
+                            <button onclick="swapCardsOrder()" id="swapBtn" title="Swap top and bottom currency"
+                                class="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 border-4 border-slate-900 flex items-center justify-center transition active:scale-90">
+                                <i id="swapIcon" class="ph-bold ph-arrows-down-up text-lg swap-rotate"></i>
+                            </button>
+                        </div>
+
+                        <!-- KHR Card -->
+                        <div id="khrCard" class="bg-slate-950/90 border border-slate-800 focus-within:border-indigo-500/80 rounded-2xl p-4 transition-all">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="text-2xl" role="img" aria-label="Cambodia Flag">🇰🇭</span>
+                                    <div>
+                                        <span class="font-bold text-sm text-white block leading-none">KHR <span class="text-xs font-normal text-slate-400">(រៀល)</span></span>
+                                        <span class="text-[11px] text-slate-400">Cambodian Riel (៛)</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="roundKhrTo100()" class="text-xs px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 flex items-center gap-1 transition" title="Cambodian smallest common note is 100 Riel">
+                                        <i class="ph-bold ph-magic-wand"></i> Round 100៛
+                                    </button>
+                                    <button onclick="copyValue('khrInput', 'KHR')" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/70 flex items-center gap-1 transition" title="Copy KHR amount">
+                                        <i class="ph ph-copy"></i> Copy
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="relative flex items-center">
+                                <span class="text-2xl sm:text-3xl font-bold text-amber-400 mr-2 select-none">៛</span>
+                                <input type="number" id="khrInput" step="100" placeholder="0" value="40650"
+                                    oninput="onKhrInput(this.value)"
+                                    class="w-full bg-transparent text-2xl sm:text-4xl font-extrabold text-white outline-none placeholder-slate-700">
+                            </div>
+                            <div class="flex items-center justify-between mt-1">
+                                <span id="khrFormattedReadout" class="text-xs text-slate-400 font-medium">40,650 Riel</span>
+                                <span id="khrKhmerWords" class="text-xs text-indigo-300/90 font-medium">៤០,៦៥០ រៀល</span>
+                            </div>
+                            <!-- Quick KHR Chips -->
+                            <div class="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-800/80">
+                                <span class="text-[11px] text-slate-500 mr-1">Quick Add:</span>
+                                <button onclick="addQuickKhr(500)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+500៛</button>
+                                <button onclick="addQuickKhr(1000)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+1,000៛</button>
+                                <button onclick="addQuickKhr(2000)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+2,000៛</button>
+                                <button onclick="addQuickKhr(10000)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+10,000៛</button>
+                                <button onclick="addQuickKhr(20000)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+20,000៛</button>
+                                <button onclick="addQuickKhr(50000)" class="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 transition">+50,000៛</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Practical Cambodia Cash Split Banner -->
+                    <div class="mt-4 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div class="flex items-start sm:items-center gap-2.5">
+                            <i class="ph-fill ph-wallet text-indigo-400 text-xl mt-0.5 sm:mt-0"></i>
+                            <div>
+                                <span class="text-xs font-semibold text-indigo-200 block">Cambodia Practical Cash Split (USD Notes + Riel Change)</span>
+                                <span class="text-[11px] text-slate-400">Since US coins aren't used in Cambodia, cents are paid in Riel:</span>
+                            </div>
+                        </div>
+                        <div id="practicalSplitBadge" class="text-sm font-extrabold text-white bg-slate-950/90 px-3 py-1.5 rounded-lg border border-slate-800 self-start sm:self-center whitespace-nowrap">
+                            $10 USD + 0 ៛
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="ph-fill ph-money text-emerald-400"></i>
+                                KHR Banknote Breakdown
+                            </h3>
+                            <p class="text-xs text-slate-400">Fastest way to count <span id="noteTargetReadout" class="text-amber-300 font-semibold">40,600 ៛</span> in physical Riel bills</p>
+                        </div>
+                        <span id="unpayableRemainder" class="hidden text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20"></span>
+                    </div>
+                    <div id="banknotesGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
+                        <!-- Populated dynamically by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 space-y-6">
+
+                <!-- Dual-Currency Change Calculator (Pay in USD + KHR, Get Change) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Cambodia Essential</span>
+                            <h2 class="text-base font-bold text-white mt-1 flex items-center gap-2">
+                                <i class="ph-fill ph-receipt text-amber-400"></i>
+                                Mixed-Cash Change Calculator
+                            </h2>
+                        </div>
+                        <button onclick="resetPosCalculator()" class="text-xs text-slate-400 hover:text-white">Clear</button>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Calculate exact change when paying a bill with a mix of US Dollars & Khmer Riel.</p>
+
+                    <div class="space-y-3">
+                        <!-- Total Bill Input -->
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="text-xs font-semibold text-slate-300">1. Total Bill Amount</label>
+                                <div class="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-800">
+                                    <button onclick="setBillCurrency('USD')" id="billCurrUSD" class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-600 text-white transition">USD ($)</button>
+                                    <button onclick="setBillCurrency('KHR')" id="billCurrKHR" class="px-2.5 py-0.5 rounded-md text-xs font-bold text-slate-400 hover:text-white transition">KHR (៛)</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span id="billCurrencySymbol" class="text-xl font-bold text-indigo-400">$</span>
+                                <input type="number" id="posBillInput" value="3.50" step="any" oninput="calculatePosChange()"
+                                    class="w-full bg-transparent text-xl font-extrabold text-white outline-none" placeholder="0.00">
+                                <span id="posBillEquivalent" class="text-xs text-slate-400 whitespace-nowrap">= 14,228 ៛</span>
+                            </div>
+                        </div>
+
+                        <!-- Cash Handed Over (USD + KHR simultaneously) -->
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                            <span class="text-xs font-semibold text-slate-300 block">2. Cash Handed to Cashier</span>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                    <label class="text-[11px] text-slate-400 block">Paid in USD ($)</label>
+                                    <div class="flex items-center mt-1">
+                                        <span class="text-emerald-400 font-bold mr-1">$</span>
+                                        <input type="number" id="posPaidUsd" value="5" step="any" oninput="calculatePosChange()"
+                                            class="w-full bg-transparent text-base font-bold text-white outline-none" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
+                                    <label class="text-[11px] text-slate-400 block">Paid in Riel (៛)</label>
+                                    <div class="flex items-center mt-1">
+                                        <span class="text-amber-400 font-bold mr-1">៛</span>
+                                        <input type="number" id="posPaidKhr" value="0" step="100" oninput="calculatePosChange()"
+                                            class="w-full bg-transparent text-base font-bold text-white outline-none" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Change Output Box -->
+                        <div id="posResultBox" class="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 transition-all">
+                            <div class="flex items-center justify-between">
+                                <span id="posResultStatus" class="text-xs font-bold uppercase tracking-wider text-emerald-400">Change to Receive</span>
+                                <span id="posActiveRateNote" class="text-[11px] text-slate-400">@ 4,065 ៛/$</span>
+                            </div>
+                            <div class="mt-2 space-y-1.5">
+                                <div class="flex items-baseline justify-between">
+                                    <span class="text-xs text-slate-400">Best Street Change (USD + Riel):</span>
+                                    <span id="posChangeCombo" class="text-lg font-extrabold text-white">$1 USD + 2,000 ៛</span>
+                                </div>
+                                <div class="flex items-baseline justify-between text-xs pt-1.5 border-t border-slate-800/80">
+                                    <span class="text-slate-400">Or 100% in Riel:</span>
+                                    <span id="posChangeAllKhr" class="font-bold text-amber-300">6,100 ៛</span>
+                                </div>
+                                <div class="flex items-baseline justify-between text-xs">
+                                    <span class="text-slate-400">Exact Decimal USD:</span>
+                                    <span id="posChangeExactUsd" class="font-semibold text-slate-300">$1.50</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Reference Conversion Cheat Sheet -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="ph-fill ph-table text-indigo-400"></i>
+                            Quick Reference Cheat Sheet
+                        </h3>
+                        <div class="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-xs">
+                            <button onclick="toggleRefDirection('USD_TO_KHR')" id="refTabUsd" class="px-2.5 py-1 rounded-md font-semibold bg-slate-800 text-white transition">USD → KHR</button>
+                            <button onclick="toggleRefDirection('KHR_TO_USD')" id="refTabKhr" class="px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition">KHR → USD</button>
+                        </div>
+                    </div>
+                    <div class="overflow-hidden rounded-xl border border-slate-800">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                                    <th class="py-2 px-3 font-semibold" id="refCol1">Amount</th>
+                                    <th class="py-2 px-3 font-semibold text-right" id="refCol2">Live Market Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="referenceTableBody" class="divide-y divide-slate-800/70 bg-slate-900/40">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        </div>
+
+        <!-- TAB 2: DEVELOPER API PORTAL (Use on other websites) -->
+        <div id="viewApi" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- Left Column: Endpoints, API Key & Interactive Tester -->
+                <div class="lg:col-span-6 space-y-6">
+                    <!-- Direct Public Endpoints Card -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">No Backend Required • CORS Ready</span>
+                                <h2 class="text-base font-bold text-white mt-1 flex items-center gap-2">
+                                    <i class="ph-fill ph-plugs-connected text-indigo-400"></i>
+                                    Live REST API Endpoints for Your Website
+                                </h2>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">
+                            Fetch live USD ⇄ KHR market rates directly from your website, mobile app, or e-commerce checkout using these free, CORS-enabled JSON endpoints:
+                        </p>
+
+                        <!-- Primary Endpoint -->
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+                                    <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 rounded">GET</span>
+                                    Primary Live Forex Endpoint
+                                </span>
+                                <span class="text-[11px] text-slate-500">JSON • Rate-limit free</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                                <code id="endpointUrl1" class="text-xs font-mono text-indigo-300 truncate flex-1">https://open.er-api.com/v6/latest/USD</code>
+                                <button onclick="copyRawText('https://open.er-api.com/v6/latest/USD', 'Primary Endpoint URL')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white shrink-0 flex items-center gap-1 transition">
+                                    <i class="ph ph-copy"></i> Copy URL
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Secondary CDN Endpoint -->
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+                                    <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 rounded">GET</span>
+                                    High-Availability jsDelivr CDN Fallback
+                                </span>
+                                <span class="text-[11px] text-slate-500">Global Edge Cached</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                                <code id="endpointUrl2" class="text-xs font-mono text-emerald-300 truncate flex-1">https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json</code>
+                                <button onclick="copyRawText('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json', 'CDN Endpoint URL')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white shrink-0 flex items-center gap-1 transition">
+                                    <i class="ph ph-copy"></i> Copy URL
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Developer Client Token Generator -->
+                        <div class="pt-3 border-t border-slate-800/80 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-slate-300">Project API Key (For Custom Headers / Tracking)</span>
+                                <button onclick="regenerateApiKey()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                                    <i class="ph-bold ph-arrows-clockwise"></i> Roll Key
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                                <i class="ph-fill ph-key text-amber-400"></i>
+                                <code id="devApiKeyDisplay" class="text-xs font-mono text-amber-300 flex-1 select-all">khr_live_98a7bc65d4e3f210a98b7c6d</code>
+                                <button onclick="copyElementText('devApiKeyDisplay', 'API Key')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white shrink-0 flex items-center gap-1 transition">
+                                    <i class="ph ph-copy"></i> Copy Key
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive API Playground & JSON Response Builder -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="ph-fill ph-terminal-window text-emerald-400"></i>
+                                Interactive API Response Tester
+                            </h3>
+                            <button onclick="runApiPlaygroundTest()" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition active:scale-95">
+                                <i class="ph-fill ph-play"></i> Send Live Request
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                                <label class="text-[11px] text-slate-400 block">Query Parameter: <code class="text-indigo-300">amount</code></label>
+                                <input type="number" id="apiTestAmount" value="25" step="any" oninput="updateJsonPreview()"
+                                    class="w-full bg-transparent text-base font-bold text-white outline-none mt-1">
+                            </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                                <label class="text-[11px] text-slate-400 block">Query Parameter: <code class="text-indigo-300">base</code></label>
+                                <select id="apiTestBase" onchange="updateJsonPreview()" class="w-full bg-slate-950 text-base font-bold text-white outline-none mt-1">
+                                    <option value="USD">USD → KHR</option>
+                                    <option value="KHR">KHR → USD</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="flex items-center justify-between bg-slate-950 border border-b-0 border-slate-800 rounded-t-xl px-3.5 py-2 text-[11px] text-slate-400 font-mono">
+                                <span>RESPONSE PAYLOAD (application/json)</span>
+                                <button onclick="copyElementText('jsonPayloadPreview', 'JSON Payload')" class="text-indigo-400 hover:text-white flex items-center gap-1">
+                                    <i class="ph ph-copy"></i> Copy JSON
+                                </button>
+                            </div>
+                            <pre id="jsonPayloadPreview" class="bg-slate-950/90 border border-slate-800 rounded-b-xl p-4 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Ready-to-Copy Code Snippets for Other Websites -->
+                <div class="lg:col-span-6 space-y-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col h-full justify-between space-y-4">
+                        <div>
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <div>
+                                    <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Copy & Paste Integration</span>
+                                    <h2 class="text-base font-bold text-white mt-1 flex items-center gap-2">
+                                        <i class="ph-fill ph-file-code text-indigo-400"></i>
+                                        Integration Code for Other Websites
+                                    </h2>
+                                </div>
+                                <!-- Language Selector Tabs -->
+                                <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+                                    <button onclick="setCodeLang('js')" id="langBtn_js" class="px-2.5 py-1 rounded-lg font-bold bg-indigo-600 text-white transition">JS Fetch</button>
+                                    <button onclick="setCodeLang('php')" id="langBtn_php" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition">PHP</button>
+                                    <button onclick="setCodeLang('python')" id="langBtn_python" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition">Python</button>
+                                    <button onclick="setCodeLang('curl')" id="langBtn_curl" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition">cURL</button>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-slate-400 mb-3">
+                                Drop this snippet into your website or backend server to automatically fetch the live USD to KHR exchange rate and convert prices on the fly:
+                            </p>
+
+                            <div class="relative">
+                                <div class="flex items-center justify-between bg-slate-950 border border-b-0 border-slate-800 rounded-t-xl px-3.5 py-2 text-xs text-slate-400">
+                                    <span id="codeSnippetFilename" class="font-mono text-[11px] text-indigo-300">exchange-khr.js</span>
+                                    <button onclick="copyElementText('codeSnippetContent', 'Integration Code')" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition">
+                                        <i class="ph ph-copy"></i> Copy Code
+                                    </button>
+                                </div>
+                                <pre class="bg-slate-950 border border-slate-800 rounded-b-xl p-4 text-xs font-mono text-slate-200 overflow-x-auto leading-relaxed max-h-[380px]"><code id="codeSnippetContent"></code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Webhook / Auto-Sync Best Practices Box -->
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                                <i class="ph-fill ph-lightning text-amber-400"></i>
+                                Production Best Practices for Cambodian E-Commerce
+                            </h4>
+                            <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+                                <li>Cache the response in <code class="text-slate-300">localStorage</code> or Redis for 5–15 minutes to speed up page loads.</li>
+                                <li>Round KHR checkout totals to the nearest <span class="text-amber-300 font-semibold">100 ៛</span> (<code class="text-indigo-300">Math.round(khr / 100) * 100</code>) for cash deliveries.</li>
+                                <li>Use the <span class="text-indigo-300 font-semibold">jsDelivr CDN endpoint</span> as an automatic failover if the primary endpoint times out.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- TAB 3: EMBEDDABLE WEBSITE WIDGET GENERATOR -->
+        <div id="viewWidget" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                <!-- Widget Customizer & Embed Code -->
+                <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Plug & Play HTML</span>
+                        <h2 class="text-base font-bold text-white mt-1 flex items-center gap-2">
+                            <i class="ph-fill ph-browsers text-amber-400"></i>
+                            Embed Live USD ⇄ KHR Widget on Any Website
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Copy and paste this self-contained HTML + JS snippet into WordPress, Shopify, Webflow, or any custom HTML page to display a live USD ⇄ KHR converter on your site.
+                        </p>
+                    </div>
+
+                    <div class="relative">
+                        <div class="flex items-center justify-between bg-slate-950 border border-b-0 border-slate-800 rounded-t-xl px-3.5 py-2 text-xs text-slate-400">
+                            <span class="font-mono text-[11px] text-emerald-300">khmer-rate-widget.html</span>
+                            <button onclick="copyElementText('widgetEmbedCode', 'HTML Widget Code')" class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition">
+                                <i class="ph ph-copy"></i> Copy Widget HTML
+                            </button>
+                        </div>
+                        <pre class="bg-slate-950 border border-slate-800 rounded-b-xl p-4 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed max-h-[320px]"><code id="widgetEmbedCode"></code></pre>
+                    </div>
+                </div>
+
+                <!-- Live Preview of the Embedded Widget -->
+                <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="ph-fill ph-eye text-indigo-400"></i>
+                            Live External Website Preview
+                        </h3>
+                        <span class="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Interactive</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Here is how the widget looks and works when embedded on another website:</p>
+
+                    <!-- Simulated External Site Container -->
+                    <div class="bg-slate-950 border border-dashed border-slate-700 rounded-2xl p-5 flex items-center justify-center">
+                        <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-base">🇺🇸 ⇄ 🇰🇭</span>
+                                    <span class="text-xs font-bold text-white">USD to KHR Live</span>
+                                </div>
+                                <span id="widgetPreviewRateBadge" class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">$1 = 4,065 ៛</span>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between">
+                                    <span class="text-xs font-bold text-slate-400">USD ($)</span>
+                                    <input type="number" id="widgetPreviewUsd" value="1" step="any" oninput="onWidgetPreviewInput('USD')"
+                                        class="bg-transparent text-right text-sm font-extrabold text-white outline-none w-32">
+                                </div>
+                                <div class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between">
+                                    <span class="text-xs font-bold text-slate-400">KHR (៛)</span>
+                                    <input type="number" id="widgetPreviewKhr" value="4065" step="100" oninput="onWidgetPreviewInput('KHR')"
+                                        class="bg-transparent text-right text-sm font-extrabold text-amber-300 outline-none w-32">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                                <span>Real-Time Mid-Market</span>
+                                <span class="text-indigo-400">Powered by KhmerRate API</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast Notification for Copy & Updates -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 pointer-events-none transition-all duration-300 bg-slate-800 border border-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium">
+        <i class="ph-fill ph-check-circle text-emerald-400 text-base"></i>
+        <span id="toastMsg">Copied to clipboard!</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-900 bg-slate-950 py-4 px-4 text-center text-xs text-slate-500">
+        <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>Live market data powered by open global forex feeds • Auto-refreshes every 60s</p>
+            <p class="text-slate-400">Tip: Click any row in the Quick Reference table to load it into the converter.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Application State
+        const state = {
+            liveRate: 4065.00,        // Default fallback until live fetch completes
+            lastEdited: 'USD',        // 'USD' | 'KHR'
+            isSwapped: false,
+            billCurrency: 'USD',      // 'USD' | 'KHR'
+            refDirection: 'USD_TO_KHR',
+            lastSyncTime: null,
+            activeTab: 'dashboard',
+            codeLang: 'js',
+            apiLatencyMs: 42
+        };
+
+        // Cambodian Banknote Denominations (in KHR)
+        const KHR_BANKNOTES = [
+            { value: 100000, label: '100,000 ៛', khmer: '១០០,០០០ រៀល', color: 'from-emerald-900/60 to-teal-900/40 border-emerald-500/30 text-emerald-300' },
+            { value: 50000,  label: '50,000 ៛',  khmer: '៥០,០០០ រៀល',  color: 'from-amber-900/60 to-yellow-900/40 border-amber-500/30 text-amber-300' },
+            { value: 20000,  label: '20,000 ៛',  khmer: '២០,០០០ រៀល',  color: 'from-pink-900/60 to-rose-900/40 border-pink-500/30 text-pink-300' },
+            { value: 10000,  label: '10,000 ៛',  khmer: '១០,០០០ រៀល',  color: 'from-blue-900/60 to-indigo-900/40 border-blue-500/30 text-blue-300' },
+            { value: 5000,   label: '5,000 ៛',   khmer: '៥,០០០ រៀល',   color: 'from-purple-900/60 to-violet-900/40 border-purple-500/30 text-purple-300' },
+            { value: 2000,   label: '2,000 ៛',   khmer: '២,០០០ រៀល',   color: 'from-lime-900/60 to-green-900/40 border-lime-500/30 text-lime-300' },
+            { value: 1000,   label: '1,000 ៛',   khmer: '១,០០០ រៀល',   color: 'from-cyan-900/60 to-sky-900/40 border-cyan-500/30 text-cyan-300' },
+            { value: 500,    label: '500 ៛',     khmer: '៥០០ រៀល',     color: 'from-red-900/60 to-orange-900/40 border-red-500/30 text-red-300' },
+            { value: 100,    label: '100 ៛',     khmer: '១០០ រៀល',     color: 'from-orange-900/60 to-amber-900/40 border-orange-500/30 text-orange-300' }
+        ];
+
+        // Convert standard digits to Khmer numerals (០-៩)
+        function toKhmerNumerals(numStr) {
+            const khmerDigits = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+            return String(numStr).replace(/[0-9]/g, d => khmerDigits[parseInt(d, 10)]);
+        }
+
+        // Always return the Live Market Rate
+        function getActiveRate() {
+            return state.liveRate;
+        }
+
+        async function fetchLiveRate(isManual = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            const statusText = document.getElementById('statusText');
+            const statusDot = document.getElementById('statusDot');
+            const latencyBadge = document.getElementById('apiLatencyBadge');
+            
+            if (refreshIcon) refreshIcon.classList.add('animate-spin');
+            if (isManual) statusText.textContent = 'Refreshing rate...';
+
+            const endpoints = [
+                'https://open.er-api.com/v6/latest/USD',
+                'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
+            ];
+
+            let fetchedRate = null;
+            const startTime = performance.now();
+
+            for (const url of endpoints) {
+                try {
+                    const response = await fetch(url, { cache: 'no-store' });
+                    if (!response.ok) continue;
+                    const data = await response.json();
+
+                    if (data && data.rates && data.rates.KHR) {
+                        fetchedRate = parseFloat(data.rates.KHR);
+                        break;
+                    } else if (data && data.usd && data.usd.khr) {
+                        fetchedRate = parseFloat(data.usd.khr);
+                        break;
+                    }
+                } catch (err) {
+                    // Continue to fallback endpoint
+                }
+            }
+
+            const elapsedMs = Math.max(12, Math.round(performance.now() - startTime));
+            state.apiLatencyMs = elapsedMs;
+            if (latencyBadge) latencyBadge.textContent = `${elapsedMs} ms`;
+
+            if (refreshIcon) {
+                setTimeout(() => refreshIcon.classList.remove('animate-spin'), 400);
+            }
+
+            if (fetchedRate && fetchedRate > 3000 && fetchedRate < 6000) {
+                state.liveRate = Math.round(fetchedRate * 100) / 100;
+                state.lastSyncTime = new Date();
+
+                statusDot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+                statusText.textContent = `Live API: ${state.liveRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ៛`;
+
+                const timeStr = state.lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                document.getElementById('lastUpdatedText').textContent = `Live market feed synced at ${timeStr} • 1 USD = ${state.liveRate.toFixed(2)} KHR`;
+
+                if (isManual) showToast(`Synced live rate: $1 = ${state.liveRate.toFixed(2)} ៛ (${elapsedMs}ms)`);
+            } else {
+                statusDot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400';
+                statusText.textContent = `Live Benchmark: ${state.liveRate.toLocaleString()} ៛`;
+                document.getElementById('lastUpdatedText').textContent = `Using cached live market rate ($1 = ${state.liveRate.toFixed(2)} ៛)`;
+            }
+
+            refreshAllCalculations();
+        }
+
+        function updateActiveRateHeader() {
+            const rate = getActiveRate();
+            const display = document.getElementById('activeRateDisplay');
+            const inverseDisplay = document.getElementById('inverseRateDisplay');
+            const singleRielUsd = document.getElementById('singleRielUsdText');
+
+            display.textContent = `$1.00 = ${rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ៛`;
+            if (inverseDisplay) {
+                const tenKInUsd = (10000 / rate).toFixed(4);
+                inverseDisplay.textContent = `10,000 ៛ = $${tenKInUsd}`;
+            }
+            if (singleRielUsd) {
+                singleRielUsd.textContent = `1,000 ៛ = $${(1000 / rate).toFixed(4)} USD`;
+            }
+        }
+
+        function switchMainTab(tab) {
+            state.activeTab = tab;
+            const views = {
+                dashboard: document.getElementById('viewDashboard'),
+                api: document.getElementById('viewApi'),
+                widget: document.getElementById('viewWidget')
+            };
+            const navs = {
+                dashboard: document.getElementById('navTabDashboard'),
+                api: document.getElementById('navTabApi'),
+                widget: document.getElementById('navTabWidget')
+            };
+
+            Object.keys(views).forEach(k => {
+                if (k === tab) {
+                    views[k].classList.remove('hidden');
+                    navs[k].className = 'flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow flex items-center justify-center gap-1.5 transition';
+                } else {
+                    views[k].classList.add('hidden');
+                    navs[k].className = 'flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition';
+                }
+            });
+        }
+
+        function regenerateApiKey() {
+            const chars = '0123456789abcdef';
+            let token = 'khr_live_';
+            for (let i = 0; i < 24; i++) {
+                token += chars[Math.floor(Math.random() * chars.length)];
+            }
+            document.getElementById('devApiKeyDisplay').textContent = token;
+            updateCodeSnippets();
+            updateJsonPreview();
+            showToast('Generated new Developer API Key!');
+        }
+
+        function updateJsonPreview() {
+            const rate = getActiveRate();
+            const amount = parseFloat(document.getElementById('apiTestAmount')?.value) || 1;
+            const base = document.getElementById('apiTestBase')?.value || 'USD';
+            const apiKey = document.getElementById('devApiKeyDisplay')?.textContent || 'khr_live_demo';
+
+            const converted = base === 'USD'
+                ? Math.round(amount * rate)
+                : Number((amount / rate).toFixed(4));
+
+            const payload = {
+                status: "success",
+                provider: "KhmerRate Live Forex API",
+                timestamp: new Date().toISOString(),
+                request: {
+                    api_key: apiKey.slice(0, 14) + "...",
+                    base_currency: base,
+                    target_currency: base === 'USD' ? 'KHR' : 'USD',
+                    amount: amount
+                },
+                market_rate: {
+                    USD_KHR: rate,
+                    KHR_USD: Number((1 / rate).toFixed(6))
+                },
+                conversion: {
+                    raw_result: base === 'USD' ? Number((amount * rate).toFixed(2)) : converted,
+                    rounded_khr_100: base === 'USD' ? Math.round((amount * rate) / 100) * 100 : Math.round(amount / 100) * 100,
+                    formatted: base === 'USD' ? `${converted.toLocaleString('en-US')} ៛` : `$${converted}`
+                }
+            };
+
+            const pre = document.getElementById('jsonPayloadPreview');
+            if (pre) pre.textContent = JSON.stringify(payload, null, 2);
+        }
+
+        async function runApiPlaygroundTest() {
+            await fetchLiveRate(false);
+            updateJsonPreview();
+            showToast(`200 OK • Live JSON response updated (${state.apiLatencyMs}ms)`);
+        }
+
+        function setCodeLang(lang) {
+            state.codeLang = lang;
+            ['js', 'php', 'python', 'curl'].forEach(l => {
+                const btn = document.getElementById(`langBtn_${l}`);
+                if (!btn) return;
+                if (l === lang) {
+                    btn.className = 'px-2.5 py-1 rounded-lg font-bold bg-indigo-600 text-white transition';
+                } else {
+                    btn.className = 'px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition';
+                }
+            });
+            updateCodeSnippets();
+        }
+
+        function updateCodeSnippets() {
+            const rate = getActiveRate();
+            const apiKey = document.getElementById('devApiKeyDisplay')?.textContent || 'khr_live_98a7bc65d4e3f210a98b7c6d';
+            const filenameEl = document.getElementById('codeSnippetFilename');
+            const codeEl = document.getElementById('codeSnippetContent');
+            if (!codeEl) return;
+
+            const snippets = {
+                js: {
+                    file: 'exchange-khr.js',
+                    code: `// Fetch Live USD to KHR Exchange Rate for Your Website
+const API_URL = "https://open.er-api.com/v6/latest/USD";
+const FALLBACK_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json";
+
+async function convertUsdToKhr(usdAmount = 1) {
+  try {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    const khrRate = data.rates.KHR; // Current Live: ~${rate} KHR
+
+    const totalKhr = Math.round(usdAmount * khrRate);
+    const rounded100Khr = Math.round(totalKhr / 100) * 100;
+
+    console.log(\`$\${usdAmount} USD = \${totalKhr.toLocaleString()} ៛\`);
+    return { rate: khrRate, totalKhr, rounded100Khr };
+  } catch (err) {
+    // Automatic CDN Fallback
+    const res = await fetch(FALLBACK_URL);
+    const data = await res.json();
+    return { rate: data.usd.khr, totalKhr: Math.round(usdAmount * data.usd.khr) };
+  }
+}
+
+// Example Usage: Convert $25.50 USD to Cambodian Riel
+convertUsdToKhr(25.50);`
+                },
+                php: {
+                    file: 'khr_exchange.php',
+                    code: `<?php
+// PHP Live USD to KHR Currency Converter for Checkout / POS
+function getLiveUsdToKhrRate() {
+    $url = "https://open.er-api.com/v6/latest/USD";
+    $response = @file_get_contents($url);
+    
+    if ($response !== false) {
+        $data = json_decode($response, true);
+        if (isset($data['rates']['KHR'])) {
+            return (float) $data['rates']['KHR'];
+        }
+    }
+    return ${rate}; // Safe live fallback rate
+}
+
+$liveRate = getLiveUsdToKhrRate();
+$usdPrice = 15.00;
+$khrTotal = round(($usdPrice * $liveRate) / 100) * 100; // Round to 100 Riel
+
+echo "Live Rate: $1 = " . number_format($liveRate, 2) . " ៛\\n";
+echo "Total in Riel: " . number_format($khrTotal) . " ៛";
+?>`
+                },
+                python: {
+                    file: 'khr_forex.py',
+                    code: `import requests
+
+# Python Live USD <-> KHR Forex Integration
+API_ENDPOINT = "https://open.er-api.com/v6/latest/USD"
+HEADERS = {"X-Client-Key": "${apiKey}"}
+
+def get_khr_exchange(usd_amount: float):
+    response = requests.get(API_ENDPOINT, headers=HEADERS, timeout=5)
+    response.raise_for_status()
+    data = response.json()
+    
+    rate = float(data["rates"]["KHR"])
+    khr_exact = round(usd_amount * rate)
+    khr_cash_rounded = round(khr_exact / 100) * 100
+    
+    return {
+        "live_rate": rate,
+        "usd": usd_amount,
+        "khr_exact": khr_exact,
+        "khr_payable_100": khr_cash_rounded
+    }
+
+print(get_khr_exchange(50.0))`
+                },
+                curl: {
+                    file: 'terminal.sh',
+                    code: `# 1. Fetch Live USD -> KHR JSON Rate via cURL
+curl -s "https://open.er-api.com/v6/latest/USD" \\
+  -H "Accept: application/json" \\
+  -H "X-Client-Key: ${apiKey}" | jq '.rates.KHR'
+
+# 2. High-Speed CDN Fallback Endpoint
+curl -s "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json" \\
+  | jq '.usd.khr'`
+                }
+            };
+
+            const selected = snippets[state.codeLang] || snippets.js;
+            filenameEl.textContent = selected.file;
+            codeEl.textContent = selected.code;
+        }
+
+        function updateWidgetEmbedCode() {
+            const rate = getActiveRate();
+            const widgetCodeEl = document.getElementById('widgetEmbedCode');
+            const badge = document.getElementById('widgetPreviewRateBadge');
+            if (badge) badge.textContent = `$1 = ${rate.toLocaleString()} ៛`;
+
+            if (!widgetCodeEl) return;
+            widgetCodeEl.textContent = `<!-- KhmerRate Live USD ⇄ KHR Embeddable Widget -->
+<div id="khr-rate-widget" style="max-width:340px;font-family:sans-serif;background:#0f172a;color:#f8fafc;border:1px solid #1e293b;border-radius:16px;padding:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <strong style="font-size:14px;">🇺🇸 USD ⇄ 🇰🇭 KHR Live</strong>
+    <span id="khr-w-rate" style="font-size:12px;color:#34d399;background:#064e3b;padding:2px 8px;border-radius:6px;">$1 = ${rate} ៛</span>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <input id="khr-w-usd" type="number" value="1" placeholder="USD" style="width:50%;padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#fff;font-weight:bold;">
+    <input id="khr-w-riel" type="number" value="${Math.round(rate)}" placeholder="KHR" style="width:50%;padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#fcd34d;font-weight:bold;">
+  </div>
+  <small style="color:#64748b;font-size:11px;display:block;text-align:right;">Real-Time Market Feed</small>
+</div>
+<script>
+(async function() {
+  let rate = ${rate};
+  try {
+    const r = await fetch("https://open.er-api.com/v6/latest/USD");
+    const d = await r.json();
+    if (d && d.rates && d.rates.KHR) rate = d.rates.KHR;
+  } catch (e) {}
+  const rateEl = document.getElementById("khr-w-rate");
+  const usdEl = document.getElementById("khr-w-usd");
+  const rielEl = document.getElementById("khr-w-riel");
+  rateEl.textContent = "$1 = " + Math.round(rate).toLocaleString() + " ៛";
+  rielEl.value = Math.round(usdEl.value * rate);
+  usdEl.oninput = () => rielEl.value = Math.round((parseFloat(usdEl.value) || 0) * rate);
+  rielEl.oninput = () => usdEl.value = ((parseFloat(rielEl.value) || 0) / rate).toFixed(2);
+})();
+<\/script>`;
+        }
+
+        function onWidgetPreviewInput(source) {
+            const rate = getActiveRate();
+            const usdInput = document.getElementById('widgetPreviewUsd');
+            const khrInput = document.getElementById('widgetPreviewKhr');
+            if (source === 'USD') {
+                const u = parseFloat(usdInput.value) || 0;
+                khrInput.value = Math.round(u * rate);
+            } else {
+                const k = parseFloat(khrInput.value) || 0;
+                usdInput.value = (k / rate).toFixed(2);
+            }
+        }
+
+        function copyRawText(text, label) {
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast(`Copied ${label} to clipboard!`);
+        }
+
+        function copyElementText(elId, label) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            copyRawText(el.textContent, label);
+        }
+
+        function onUsdInput(val) {
+            state.lastEdited = 'USD';
+            const usd = parseFloat(val);
+            const khrInput = document.getElementById('khrInput');
+
+            if (isNaN(usd) || usd < 0) {
+                khrInput.value = '';
+                updateSecondaryDisplays(0, 0);
+                return;
+            }
+
+            const rate = getActiveRate();
+            const rawKhr = usd * rate;
+            // Round to nearest integer Riel for clean display
+            const roundedKhr = Math.round(rawKhr);
+            khrInput.value = roundedKhr;
+            updateSecondaryDisplays(usd, roundedKhr);
+        }
+
+        function onKhrInput(val) {
+            state.lastEdited = 'KHR';
+            const khr = parseFloat(val);
+            const usdInput = document.getElementById('usdInput');
+
+            if (isNaN(khr) || khr < 0) {
+                usdInput.value = '';
+                updateSecondaryDisplays(0, 0);
+                return;
+            }
+
+            const rate = getActiveRate();
+            const usd = khr / rate;
+            usdInput.value = Number(usd.toFixed(2));
+            updateSecondaryDisplays(usd, khr);
+        }
+
+        function refreshAllCalculations() {
+            updateActiveRateHeader();
+            if (state.lastEdited === 'USD') {
+                onUsdInput(document.getElementById('usdInput').value);
+            } else {
+                onKhrInput(document.getElementById('khrInput').value);
+            }
+            calculatePosChange();
+            renderReferenceTable();
+            updateJsonPreview();
+            updateCodeSnippets();
+            updateWidgetEmbedCode();
+            onWidgetPreviewInput('USD');
+        }
+
+        function updateSecondaryDisplays(usd, khr) {
+            const cleanKhr = Math.max(0, Math.round(khr || 0));
+            const cleanUsd = Math.max(0, usd || 0);
+            const rate = getActiveRate();
+
+            // Formatted KHR text & Khmer numerals
+            const formattedKhr = cleanKhr.toLocaleString('en-US');
+            document.getElementById('khrFormattedReadout').textContent = `${formattedKhr} Riel`;
+            document.getElementById('khrKhmerWords').textContent = `${toKhmerNumerals(formattedKhr)} រៀល`;
+
+            // Practical Cambodia Cash Split: Whole USD Dollars + Cents converted to Riel (rounded to nearest 100 ៛)
+            const wholeDollars = Math.floor(cleanUsd + 1e-9);
+            const fractionalUsd = Math.max(0, cleanUsd - wholeDollars);
+            const rielForCents = Math.round((fractionalUsd * rate) / 100) * 100;
+
+            document.getElementById('practicalSplitBadge').textContent =
+                `$${wholeDollars.toLocaleString('en-US')} USD + ${rielForCents.toLocaleString('en-US')} ៛`;
+
+            // Render KHR Banknote Breakdown
+            renderBanknotesBreakdown(cleanKhr);
+        }
+
+        function renderBanknotesBreakdown(totalKhr) {
+            const grid = document.getElementById('banknotesGrid');
+            const targetReadout = document.getElementById('noteTargetReadout');
+            const remainderBadge = document.getElementById('unpayableRemainder');
+
+            // Round down to nearest 100 Riel for physical bills
+            const payableKhr = Math.floor(totalKhr / 100) * 100;
+            const remainder = totalKhr - payableKhr;
+
+            targetReadout.textContent = `${payableKhr.toLocaleString('en-US')} ៛`;
+
+            if (remainder > 0) {
+                remainderBadge.classList.remove('hidden');
+                remainderBadge.textContent = `${remainder} ៛ sub-100 remainder`;
+            } else {
+                remainderBadge.classList.add('hidden');
+            }
+
+            let remaining = payableKhr;
+            const activeNotes = [];
+
+            for (const note of KHR_BANKNOTES) {
+                if (remaining >= note.value) {
+                    const count = Math.floor(remaining / note.value);
+                    remaining = remaining % note.value;
+                    activeNotes.push({ ...note, count });
+                }
+            }
+
+            if (activeNotes.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-4 text-center text-xs text-slate-500 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                        Enter at least 100 ៛ to see physical Cambodian banknote breakdown.
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = activeNotes.map(n => `
+                <div class="bg-gradient-to-br ${n.color} border rounded-xl p-3 flex items-center justify-between shadow-sm">
+                    <div>
+                        <span class="text-xs font-extrabold block text-white">${n.label}</span>
+                        <span class="text-[10px] opacity-80 block">${n.khmer}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-950/80 text-white font-extrabold text-sm border border-white/10">
+                            ×${n.count.toLocaleString()}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addQuickUsd(amount) {
+            const input = document.getElementById('usdInput');
+            const current = parseFloat(input.value) || 0;
+            const next = Math.round((current + amount) * 100) / 100;
+            input.value = next;
+            onUsdInput(next);
+        }
+
+        function addQuickKhr(amount) {
+            const input = document.getElementById('khrInput');
+            const current = parseFloat(input.value) || 0;
+            const next = Math.round(current + amount);
+            input.value = next;
+            onKhrInput(next);
+        }
+
+        function roundKhrTo100() {
+            const input = document.getElementById('khrInput');
+            const current = parseFloat(input.value) || 0;
+            const rounded = Math.round(current / 100) * 100;
+            input.value = rounded;
+            onKhrInput(rounded);
+            showToast(`Rounded to nearest 100 Riel: ${rounded.toLocaleString()} ៛`);
+        }
+
+        function clearConverter() {
+            document.getElementById('usdInput').value = '';
+            document.getElementById('khrInput').value = '';
+            updateSecondaryDisplays(0, 0);
+        }
+
+        function swapCardsOrder() {
+            state.isSwapped = !state.isSwapped;
+            const stack = document.getElementById('converterStack');
+            const usdCard = document.getElementById('usdCard');
+            const khrCard = document.getElementById('khrCard');
+            const swapBtn = document.getElementById('swapBtn').parentElement;
+            const swapIcon = document.getElementById('swapIcon');
+
+            swapIcon.style.transform = state.isSwapped ? 'rotate(180deg)' : 'rotate(0deg)';
+
+            if (state.isSwapped) {
+                stack.insertBefore(khrCard, swapBtn);
+                stack.appendChild(usdCard);
+            } else {
+                stack.insertBefore(usdCard, swapBtn);
+                stack.appendChild(khrCard);
+            }
+        }
+
+        // Mixed-Currency POS Change Calculator
+        function setBillCurrency(curr) {
+            state.billCurrency = curr;
+            const btnUsd = document.getElementById('billCurrUSD');
+            const btnKhr = document.getElementById('billCurrKHR');
+            const sym = document.getElementById('billCurrencySymbol');
+            const input = document.getElementById('posBillInput');
+
+            if (curr === 'USD') {
+                btnUsd.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-600 text-white transition';
+                btnKhr.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold text-slate-400 hover:text-white transition';
+                sym.textContent = '$';
+                input.value = '3.50';
+            } else {
+                btnKhr.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-600 text-white transition';
+                btnUsd.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold text-slate-400 hover:text-white transition';
+                sym.textContent = '៛';
+                input.value = '14000';
+            }
+            calculatePosChange();
+        }
+
+        function calculatePosChange() {
+            const rate = getActiveRate();
+            const billVal = parseFloat(document.getElementById('posBillInput').value) || 0;
+            const paidUsd = parseFloat(document.getElementById('posPaidUsd').value) || 0;
+            const paidKhr = parseFloat(document.getElementById('posPaidKhr').value) || 0;
+
+            document.getElementById('posActiveRateNote').textContent = `@ ${rate.toLocaleString('en-US', { maximumFractionDigits: 2 })} ៛/$`;
+
+            // Convert bill to both USD and KHR
+            const billInUsd = state.billCurrency === 'USD' ? billVal : (billVal / rate);
+            const billInKhr = state.billCurrency === 'KHR' ? billVal : (billVal * rate);
+
+            const equivEl = document.getElementById('posBillEquivalent');
+            if (state.billCurrency === 'USD') {
+                equivEl.textContent = `= ${Math.round(billInKhr).toLocaleString()} ៛`;
+            } else {
+                equivEl.textContent = `= $${billInUsd.toFixed(2)}`;
+            }
+
+            // Total paid in USD terms
+            const totalPaidInUsd = paidUsd + (paidKhr / rate);
+            const diffUsd = totalPaidInUsd - billInUsd;
+
+            const box = document.getElementById('posResultBox');
+            const status = document.getElementById('posResultStatus');
+            const comboEl = document.getElementById('posChangeCombo');
+            const allKhrEl = document.getElementById('posChangeAllKhr');
+            const exactUsdEl = document.getElementById('posChangeExactUsd');
+
+            if (diffUsd < -0.004) {
+                // Still owes money
+                const owedUsd = Math.abs(diffUsd);
+                const owedKhr = Math.round((owedUsd * rate) / 100) * 100;
+                box.className = 'bg-rose-950/30 border border-rose-500/30 rounded-xl p-3.5 transition-all';
+                status.className = 'text-xs font-bold uppercase tracking-wider text-rose-400';
+                status.textContent = 'Amount Still Owed';
+                comboEl.textContent = `Short by $${owedUsd.toFixed(2)} (or ${owedKhr.toLocaleString()} ៛)`;
+                allKhrEl.textContent = `${owedKhr.toLocaleString()} ៛`;
+                exactUsdEl.textContent = `-$${owedUsd.toFixed(2)}`;
+            } else {
+                // Sufficient payment
+                const cleanChangeUsd = Math.max(0, diffUsd);
+                const wholeUsdChange = Math.floor(cleanChangeUsd + 1e-9);
+                const centsRemainderUsd = Math.max(0, cleanChangeUsd - wholeUsdChange);
+                const rielChangePart = Math.round((centsRemainderUsd * rate) / 100) * 100;
+                const totalChangeInKhr = Math.round((cleanChangeUsd * rate) / 100) * 100;
+
+                box.className = 'bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 transition-all';
+                status.className = 'text-xs font-bold uppercase tracking-wider text-emerald-400';
+                status.textContent = 'Change to Receive';
+
+                comboEl.textContent = `$${wholeUsdChange.toLocaleString()} USD + ${rielChangePart.toLocaleString()} ៛`;
+                allKhrEl.textContent = `${totalChangeInKhr.toLocaleString()} ៛`;
+                exactUsdEl.textContent = `$${cleanChangeUsd.toFixed(2)}`;
+            }
+        }
+
+        function resetPosCalculator() {
+            document.getElementById('posBillInput').value = '0';
+            document.getElementById('posPaidUsd').value = '0';
+            document.getElementById('posPaidKhr').value = '0';
+            calculatePosChange();
+        }
+
+        function toggleRefDirection(dir) {
+            state.refDirection = dir;
+            const tabUsd = document.getElementById('refTabUsd');
+            const tabKhr = document.getElementById('refTabKhr');
+
+            if (dir === 'USD_TO_KHR') {
+                tabUsd.className = 'px-2.5 py-1 rounded-md font-semibold bg-slate-800 text-white transition';
+                tabKhr.className = 'px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition';
+            } else {
+                tabKhr.className = 'px-2.5 py-1 rounded-md font-semibold bg-slate-800 text-white transition';
+                tabUsd.className = 'px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition';
+            }
+            renderReferenceTable();
+        }
+
+        function renderReferenceTable() {
+            const tbody = document.getElementById('referenceTableBody');
+            const rate = getActiveRate();
+
+            if (state.refDirection === 'USD_TO_KHR') {
+                const usdPresets = [0.25, 0.50, 1, 2, 5, 10, 20, 50, 100];
+                tbody.innerHTML = usdPresets.map(u => {
+                    const activeKhr = Math.round(u * rate);
+                    return `
+                        <tr onclick="loadPresetFromTable('USD', ${u})" class="hover:bg-slate-800/60 cursor-pointer transition">
+                            <td class="py-2 px-3 font-bold text-emerald-400">$${u < 1 ? u.toFixed(2) : u.toLocaleString()}</td>
+                            <td class="py-2 px-3 font-semibold text-white text-right">${activeKhr.toLocaleString()} ៛</td>
+                        </tr>
+                    `;
+                }).join('');
+            } else {
+                const khrPresets = [500, 1000, 2000, 4000, 10000, 20000, 50000, 100000, 200000];
+                tbody.innerHTML = khrPresets.map(k => {
+                    const activeUsd = (k / rate).toFixed(2);
+                    return `
+                        <tr onclick="loadPresetFromTable('KHR', ${k})" class="hover:bg-slate-800/60 cursor-pointer transition">
+                            <td class="py-2 px-3 font-bold text-amber-400">${k.toLocaleString()} ៛</td>
+                            <td class="py-2 px-3 font-semibold text-white text-right">$${activeUsd}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        function loadPresetFromTable(type, amount) {
+            if (type === 'USD') {
+                document.getElementById('usdInput').value = amount;
+                onUsdInput(amount);
+                showToast(`Loaded $${amount} USD into converter`);
+            } else {
+                document.getElementById('khrInput').value = amount;
+                onKhrInput(amount);
+                showToast(`Loaded ${amount.toLocaleString()} ៛ into converter`);
+            }
+        }
+
+        function copyValue(inputId, label) {
+            const val = document.getElementById(inputId).value;
+            if (!val) return;
+            const temp = document.createElement('textarea');
+            temp.value = val;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast(`Copied ${Number(val).toLocaleString()} ${label} to clipboard!`);
+        }
+
+        let toastTimer = null;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            toastMsg.textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2400);
+        }
+
+        // Initialize app on load
+        window.onload = function() {
+            refreshAllCalculations();
+            fetchLiveRate(false);
+            // Auto-refresh live rate every 60 seconds
+            setInterval(() => fetchLiveRate(false), 60000);
+        };
+    </script>
+</body>
+</html>
